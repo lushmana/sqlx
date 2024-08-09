@@ -1,14 +1,15 @@
-use futures_core::future::BoxFuture;
 use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
 
+use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
+
 use sqlx_core::bytes::{BufMut, Bytes};
 
 use crate::connection::PgConnection;
 use crate::error::{Error, Result};
 use crate::ext::async_stream::TryAsyncStream;
-use crate::io::{AsyncRead, AsyncReadExt};
+use crate::io::AsyncRead;
 use crate::message::{
     CommandComplete, CopyData, CopyDone, CopyFail, CopyResponse, MessageFormat, Query,
 };
@@ -24,7 +25,7 @@ impl PgConnection {
     /// returned.
     ///
     /// Command examples and accepted formats for `COPY` data are shown here:
-    /// https://www.postgresql.org/docs/current/sql-copy.html
+    /// <https://www.postgresql.org/docs/current/sql-copy.html>
     ///
     /// ### Note
     /// [PgCopyIn::finish] or [PgCopyIn::abort] *must* be called when finished or the connection
@@ -45,13 +46,13 @@ impl PgConnection {
     ///
     /// 1. by closing the connection, or:
     /// 2. by using another connection to kill the server process that is sending the data as shown
-    /// [in this StackOverflow answer](https://stackoverflow.com/a/35319598).
+    ///    [in this StackOverflow answer](https://stackoverflow.com/a/35319598).
     ///
     /// If you don't read the stream to completion, the next time the connection is used it will
     /// need to read and discard all the remaining queued data, which could take some time.
     ///
     /// Command examples and accepted formats for `COPY` data are shown here:
-    /// https://www.postgresql.org/docs/current/sql-copy.html
+    /// <https://www.postgresql.org/docs/current/sql-copy.html>
     #[allow(clippy::needless_lifetimes)]
     pub async fn copy_out_raw<'c>(
         &'c mut self,
@@ -61,7 +62,7 @@ impl PgConnection {
     }
 }
 
-/// Implements methods for directly executing `COPY FROM/TO STDOUT` on a [`PgPool`].
+/// Implements methods for directly executing `COPY FROM/TO STDOUT` on a [`PgPool`][crate::PgPool].
 ///
 /// This is a replacement for the inherent methods on `PgPool` which could not exist
 /// once the Postgres driver was moved out into its own crate.
@@ -76,7 +77,7 @@ pub trait PgPoolCopyExt {
     /// returned.
     ///
     /// Command examples and accepted formats for `COPY` data are shown here:
-    /// https://www.postgresql.org/docs/current/sql-copy.html
+    /// <https://www.postgresql.org/docs/current/sql-copy.html>
     ///
     /// ### Note
     /// [PgCopyIn::finish] or [PgCopyIn::abort] *must* be called when finished or the connection
@@ -98,13 +99,13 @@ pub trait PgPoolCopyExt {
     ///
     /// 1. by closing the connection, or:
     /// 2. by using another connection to kill the server process that is sending the data as shown
-    /// [in this StackOverflow answer](https://stackoverflow.com/a/35319598).
+    ///    [in this StackOverflow answer](https://stackoverflow.com/a/35319598).
     ///
     /// If you don't read the stream to completion, the next time the connection is used it will
     /// need to read and discard all the remaining queued data, which could take some time.
     ///
     /// Command examples and accepted formats for `COPY` data are shown here:
-    /// https://www.postgresql.org/docs/current/sql-copy.html
+    /// <https://www.postgresql.org/docs/current/sql-copy.html>
     fn copy_out_raw<'a>(
         &'a self,
         statement: &'a str,
@@ -220,19 +221,11 @@ impl<C: DerefMut<Target = PgConnection>> PgCopyIn<C> {
             // we get canceled or read 0 bytes, but that should be fine.
             buf.put_slice(b"d\0\0\0\x04");
 
-            let read = match () {
-                // Tokio lets us read into the buffer without zeroing first
-                #[cfg(feature = "_rt-tokio")]
-                _ => source.read_buf(buf.buf_mut()).await?,
-                #[cfg(not(feature = "_rt-tokio"))]
-                _ => source.read(buf.init_remaining_mut()).await?,
-            };
+            let read = buf.read_from(&mut source).await?;
 
             if read == 0 {
                 break;
             }
-
-            buf.advance(read);
 
             // Write the length
             let read32 = u32::try_from(read)

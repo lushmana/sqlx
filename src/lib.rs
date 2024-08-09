@@ -86,6 +86,10 @@ mod macros;
 #[doc(hidden)]
 pub mod ty_match;
 
+#[cfg(feature = "macros")]
+#[doc(hidden)]
+pub mod spec_error;
+
 #[doc(hidden)]
 pub use sqlx_core::rt as __rt;
 
