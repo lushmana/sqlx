@@ -87,8 +87,7 @@ impl Migrator {
     ///  let m = Migrator::with_migrations(migrations);
     /// ```
     pub fn with_migrations(mut migrations: Vec<Migration>) -> Self {
-        // Ensure that we are sorted by version in ascending order.
-        migrations.sort_by_key(|m| m.version);
+        migrations.sort();
         Self {
             migrations: Cow::Owned(migrations),
             ..Self::DEFAULT
